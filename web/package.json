@@ -10,12 +10,12 @@
     "deploy": "node node_modules/@philiprehberger/next-deploy/dist/cli.js"
   },
   "dependencies": {
-    "@philiprehberger/next-deploy": "^1.0.0",
     "next": "16.2.7",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@philiprehberger/next-deploy": "^0.2.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
