@@ -1,0 +1,293 @@
+openapi: 3.1.0
+info:
+  title: Webhook Relay API
+  version: 0.1.0
+  summary: Production-shaped webhook delivery infrastructure.
+  description: |
+    Webhook Relay accepts events from your application and fans them out to
+    subscriber endpoints with HMAC signing, idempotency-key dedup, exponential
+    backoff retries, dead-letter handling, and per-attempt observability.
+
+    This spec is the source of truth for the API. Controllers conform to it;
+    SDKs are generated from it. Run `npx @stoplight/spectral-cli lint
+    openapi/spec.yaml` to validate locally.
+  contact:
+    name: Philip Rehberger
+    url: https://webhook-relay.dcsuniverse.com
+  license:
+    name: MIT
+    identifier: MIT
+
+servers:
+  - url: https://api.webhook-relay.dcsuniverse.com
+    description: Production
+  - url: http://localhost:8000
+    description: Local development
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: Events
+    description: Ingest, list, and retrieve events.
+  - name: Subscriptions
+    description: Manage delivery destinations and signing secrets.
+  - name: Deliveries
+    description: Per-attempt delivery log for observability and retry.
+
+paths:
+  /v1/healthz:
+    get:
+      summary: Liveness check
+      operationId: healthz
+      tags: [Events]
+      security: []
+      responses:
+        "200":
+          description: Service is up.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                  version:
+                    type: string
+                required: [status, version]
+              example:
+                status: healthy
+                version: 0.1.0
+
+  /v1/events:
+    post:
+      summary: Ingest an event
+      description: |
+        Accepts an event and enqueues it for fan-out to all matching
+        subscriptions. Provide an `idempotency_key` (max 255 chars) to safely
+        retry; dedup window is 24 hours per workspace.
+      operationId: createEvent
+      tags: [Events]
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: false
+          schema:
+            type: string
+            maxLength: 255
+          description: Optional dedup key; requests with the same key within 24h return the original response.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventCreate"
+      responses:
+        "202":
+          description: Event accepted for fan-out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Idempotency key already used with a different payload.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "429":
+          $ref: "#/components/responses/RateLimited"
+
+    get:
+      summary: List events
+      operationId: listEvents
+      tags: [Events]
+      parameters:
+        - in: query
+          name: type
+          schema:
+            type: string
+          description: Filter by event type (exact match).
+        - in: query
+          name: created_after
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Opaque cursor from a prior page's `next_cursor`.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Page of events, newest first.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Event"
+                  next_cursor:
+                    type: string
+                    nullable: true
+                required: [data, next_cursor]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/events/{id}:
+    get:
+      summary: Retrieve an event
+      operationId: getEvent
+      tags: [Events]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: ULID of the event.
+      responses:
+        "200":
+          description: The event with a delivery summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: |
+        Bearer token using your workspace API key.
+
+        ```
+        Authorization: Bearer whk_live_...
+        ```
+
+  responses:
+    BadRequest:
+      description: Validation error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: Missing or invalid API key.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Resource not found in this workspace.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    RateLimited:
+      description: Workspace rate limit exceeded.
+      headers:
+        X-RateLimit-Limit:
+          schema: { type: integer }
+        X-RateLimit-Remaining:
+          schema: { type: integer }
+        X-RateLimit-Reset:
+          schema: { type: integer, description: Unix timestamp at which the bucket refills. }
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    EventCreate:
+      type: object
+      required: [type, payload]
+      properties:
+        type:
+          type: string
+          pattern: "^[a-z0-9._-]{1,128}$"
+          example: order.created
+          description: Dot-separated event type. Must be registered first via `/v1/event-types`, or will be auto-registered on first use.
+        payload:
+          type: object
+          additionalProperties: true
+          description: Arbitrary JSON payload, max 256 KB serialized.
+
+    Event:
+      type: object
+      required: [id, type, payload, created_at, deliveries_summary]
+      properties:
+        id:
+          type: string
+          example: 01JAB3K5XYZQRSTUVWXYZABCDE
+          description: ULID, sortable by creation time.
+        type:
+          type: string
+          example: order.created
+        payload:
+          type: object
+          additionalProperties: true
+        idempotency_key:
+          type: string
+          nullable: true
+        source_ip:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        deliveries_summary:
+          type: object
+          properties:
+            total: { type: integer }
+            succeeded: { type: integer }
+            failed: { type: integer }
+            pending: { type: integer }
+          required: [total, succeeded, failed, pending]
+
+    Problem:
+      type: object
+      description: RFC 7807 problem details.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+          example: https://webhook-relay.dcsuniverse.com/errors/validation
+        title:
+          type: string
+          example: Invalid request
+        status:
+          type: integer
+          example: 400
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+          description: Field-level validation errors when applicable.
