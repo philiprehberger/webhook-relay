@@ -7,33 +7,28 @@ export default function PhpSdk() {
     <SdkPage
       snippets={{
         lang: "PHP",
-        pkg: "philiprehberger/webhook-relay-client",
-        install: "composer require philiprehberger/webhook-relay-client",
-        sourceUrl:
-          "https://github.com/philiprehberger/webhook-relay/tree/main/sdks/php",
+        pkg: "philiprehberger/php-webhook-relay-client",
+        install: "composer require philiprehberger/php-webhook-relay-client",
+        sourceUrl: "https://github.com/philiprehberger/php-webhook-relay-client",
         sendLang: "php",
-        send: `use WebhookRelay\\Client\\Api\\EventsApi;
-use WebhookRelay\\Client\\Configuration;
-use WebhookRelay\\Client\\Model\\EventCreate;
-use GuzzleHttp\\Client;
+        send: `use PhilipRehberger\\WebhookRelayClient\\WebhookRelayClient;
 
-$config = Configuration::getDefaultConfiguration()
-    ->setHost('https://api.webhook-relay.dcsuniverse.com')
-    ->setAccessToken(getenv('WEBHOOK_RELAY_KEY'));
+$relay = new WebhookRelayClient(getenv('WEBHOOK_RELAY_KEY'));
 
-$events = new EventsApi(new Client(), $config);
-
-$events->createEvent(
-    eventCreate: new EventCreate(['type' => 'order.created', 'payload' => ['order_id' => 42]]),
+$event = $relay->ingest(
+    type: 'order.created',
+    payload: ['order_id' => 42],
     idempotencyKey: 'order-42-created',
-);`,
+);
+
+print $event['id'].PHP_EOL;`,
         verifyLang: "php",
-        verify: `use WebhookRelay\\Client\\WebhookSignature;
+        verify: `use PhilipRehberger\\WebhookRelayClient\\Signer;
 
 $body = file_get_contents('php://input');     // raw bytes — DO NOT json_decode + re-encode
 $header = $_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] ?? '';
 
-if (! WebhookSignature::verify(getenv('WEBHOOK_SECRET'), $body, $header)) {
+if (! Signer::verify(getenv('WEBHOOK_SECRET'), $body, $header)) {
     http_response_code(400);
     exit('Bad signature');
 }`,

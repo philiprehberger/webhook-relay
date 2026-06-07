@@ -7,26 +7,25 @@ export default function GoSdk() {
     <SdkPage
       snippets={{
         lang: "Go",
-        pkg: "github.com/philiprehberger/webhook-relay/sdks/go",
-        install: "go get github.com/philiprehberger/webhook-relay/sdks/go",
-        sourceUrl:
-          "https://github.com/philiprehberger/webhook-relay/tree/main/sdks/go",
+        pkg: "github.com/philiprehberger/go-webhook-relay-client",
+        install: "go get github.com/philiprehberger/go-webhook-relay-client",
+        sourceUrl: "https://github.com/philiprehberger/go-webhook-relay-client",
         sendLang: "go",
-        send: `import wrclient "github.com/philiprehberger/webhook-relay/sdks/go/generated"
+        send: `import webhookrelay "github.com/philiprehberger/go-webhook-relay-client"
 
-cfg := wrclient.NewConfiguration()
-cfg.Servers = wrclient.ServerConfigurations{
-    {URL: "https://api.webhook-relay.dcsuniverse.com"},
+client := webhookrelay.NewClient(os.Getenv("WEBHOOK_RELAY_KEY"))
+
+event, err := client.Ingest(ctx, webhookrelay.EventCreateInput{
+    Type:           "order.created",
+    Payload:        map[string]any{"orderId": 42},
+    IdempotencyKey: "order-42-created",
+})
+if err != nil {
+    log.Fatal(err)
 }
-cfg.DefaultHeader["Authorization"] = "Bearer " + os.Getenv("WEBHOOK_RELAY_KEY")
-client := wrclient.NewAPIClient(cfg)
-
-_, _, err := client.EventsAPI.CreateEvent(ctx).
-    EventCreate(wrclient.EventCreate{Type: "order.created", Payload: map[string]any{"order_id": 42}}).
-    IdempotencyKey("order-42-created").
-    Execute()`,
+fmt.Println(event["id"])`,
         verifyLang: "go",
-        verify: `import "github.com/philiprehberger/webhook-relay/sdks/go"
+        verify: `import webhookrelay "github.com/philiprehberger/go-webhook-relay-client"
 
 func WebhookHandler(w http.ResponseWriter, r *http.Request) {
     body, _ := io.ReadAll(r.Body)

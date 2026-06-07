@@ -39,33 +39,37 @@ const SDKS = [
   {
     title: "TypeScript SDK",
     version: VERSION,
-    blurb: "Generated client + verifier helper. Node 18+, ESM.",
+    blurb: "Dependency-free TS, dual ESM + CJS. Node 18+. Published to npm.",
     href: `/sdks/webhook-relay-sdk-typescript-${VERSION}.zip`,
     install: "npm i @philiprehberger/webhook-relay-client",
+    repo: "https://github.com/philiprehberger/ts-webhook-relay-client",
     size: "61 KB",
   },
   {
     title: "PHP SDK",
     version: VERSION,
-    blurb: "PSR-4 namespaced, Guzzle-based. PHP 8.1+.",
+    blurb: "PSR-4 namespaced, curl-backed. PHP 8.2+. Published to Packagist.",
     href: `/sdks/webhook-relay-sdk-php-${VERSION}.zip`,
-    install: "composer require philiprehberger/webhook-relay-client",
+    install: "composer require philiprehberger/php-webhook-relay-client",
+    repo: "https://github.com/philiprehberger/php-webhook-relay-client",
     size: "133 KB",
   },
   {
     title: "Python SDK",
     version: VERSION,
-    blurb: "urllib3 + pydantic, Python 3.10+. pyproject.toml-based.",
+    blurb: "urllib-based, PEP 561 typed. Python 3.10+. Published to PyPI.",
     href: `/sdks/webhook-relay-sdk-python-${VERSION}.zip`,
-    install: "pip install webhook-relay-client",
+    install: "pip install philiprehberger-webhook-relay-client",
+    repo: "https://github.com/philiprehberger/py-webhook-relay-client",
     size: "108 KB",
   },
   {
     title: "Go SDK",
     version: VERSION,
-    blurb: "Zero runtime deps beyond stdlib. Go 1.22+.",
+    blurb: "Zero runtime deps beyond stdlib. Go 1.22+. proxy.golang.org.",
     href: `/sdks/webhook-relay-sdk-go-${VERSION}.zip`,
-    install: "go get github.com/philiprehberger/webhook-relay/sdks/go",
+    install: "go get github.com/philiprehberger/go-webhook-relay-client",
+    repo: "https://github.com/philiprehberger/go-webhook-relay-client",
     size: "91 KB",
   },
 ];
@@ -135,7 +139,7 @@ export default function Downloads() {
                   Download zip
                 </a>
                 <Link
-                  href={`https://github.com/philiprehberger/webhook-relay/tree/main/sdks/${s.title.split(" ")[0].toLowerCase()}`}
+                  href={s.repo}
                   className="rounded-md border border-zinc-800 hover:border-zinc-600 px-3 py-1.5 text-zinc-400 hover:text-zinc-200 transition-colors"
                 >
                   View on GitHub

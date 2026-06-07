@@ -46,16 +46,16 @@ verifySignature(
 );`}
       </CodeBlock>
       <CodeBlock language="php">
-{`use WebhookRelay\\Client\\WebhookSignature;
+{`use PhilipRehberger\\WebhookRelayClient\\Signer;
 
-WebhookSignature::verify(
+Signer::verify(
     $secret,
     file_get_contents('php://input'),
     $_SERVER['HTTP_X_WEBHOOK_SIGNATURE'] ?? '',
 );`}
       </CodeBlock>
       <CodeBlock language="python">
-{`from webhook_relay import verify_signature
+{`from philiprehberger_webhook_relay_client import verify_signature
 
 verify_signature(secret, request.body, request.headers.get("X-Webhook-Signature"))`}
       </CodeBlock>

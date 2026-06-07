@@ -9,20 +9,21 @@ export default function TypeScriptSdk() {
         lang: "TypeScript",
         pkg: "@philiprehberger/webhook-relay-client",
         install: "npm i @philiprehberger/webhook-relay-client",
-        sourceUrl:
-          "https://github.com/philiprehberger/webhook-relay/tree/main/sdks/typescript",
+        sourceUrl: "https://github.com/philiprehberger/ts-webhook-relay-client",
         sendLang: "typescript",
-        send: `import { EventsApi, Configuration } from "@philiprehberger/webhook-relay-client/generated";
+        send: `import { WebhookRelayClient } from "@philiprehberger/webhook-relay-client";
 
-const events = new EventsApi(new Configuration({
-  basePath: "https://api.webhook-relay.dcsuniverse.com",
-  accessToken: process.env.WEBHOOK_RELAY_KEY,    // whk_live_...
-}));
+const relay = new WebhookRelayClient({
+  apiKey: process.env.WEBHOOK_RELAY_KEY!,    // whk_live_... / whk_test_... / whk_sandbox_...
+});
 
-await events.createEvent({
-  eventCreate: { type: "order.created", payload: { orderId: 42 } },
+const event = await relay.ingest({
+  type: "order.created",
+  payload: { orderId: 42 },
   idempotencyKey: "order-42-created",
-});`,
+});
+
+console.log(event.id, event.deliveries_summary);`,
         verifyLang: "typescript",
         verify: `import { verifySignature } from "@philiprehberger/webhook-relay-client";
 

@@ -148,7 +148,7 @@ const FEATURES = [
 
 const SDKS = [
   { lang: "TypeScript", install: "npm i @philiprehberger/webhook-relay-client", href: "/sdks/typescript" },
-  { lang: "PHP", install: "composer require philiprehberger/webhook-relay-client", href: "/sdks/php" },
-  { lang: "Python", install: "pip install webhook-relay-client", href: "/sdks/python" },
-  { lang: "Go", install: "go get github.com/philiprehberger/webhook-relay/sdks/go", href: "/sdks/go" },
+  { lang: "PHP", install: "composer require philiprehberger/php-webhook-relay-client", href: "/sdks/php" },
+  { lang: "Python", install: "pip install philiprehberger-webhook-relay-client", href: "/sdks/python" },
+  { lang: "Go", install: "go get github.com/philiprehberger/go-webhook-relay-client", href: "/sdks/go" },
 ];

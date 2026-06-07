@@ -7,27 +7,23 @@ export default function PythonSdk() {
     <SdkPage
       snippets={{
         lang: "Python",
-        pkg: "webhook-relay-client",
-        install: "pip install 'webhook-relay-client[generated]'",
-        sourceUrl:
-          "https://github.com/philiprehberger/webhook-relay/tree/main/sdks/python",
+        pkg: "philiprehberger-webhook-relay-client",
+        install: "pip install philiprehberger-webhook-relay-client",
+        sourceUrl: "https://github.com/philiprehberger/py-webhook-relay-client",
         sendLang: "python",
-        send: `from webhook_relay_client import Configuration, ApiClient
-from webhook_relay_client.api import EventsApi
-from webhook_relay_client.models import EventCreate
+        send: `from philiprehberger_webhook_relay_client import WebhookRelayClient
 
-config = Configuration(
-    host="https://api.webhook-relay.dcsuniverse.com",
-    access_token=os.environ["WEBHOOK_RELAY_KEY"],
-)
-events = EventsApi(ApiClient(config))
+relay = WebhookRelayClient(api_key=os.environ["WEBHOOK_RELAY_KEY"])
 
-events.create_event(
-    event_create=EventCreate(type="order.created", payload={"order_id": 42}),
+event = relay.ingest(
+    event_type="order.created",
+    payload={"order_id": 42},
     idempotency_key="order-42-created",
-)`,
+)
+
+print(event["id"], event["deliveries_summary"])`,
         verifyLang: "python",
-        verify: `from webhook_relay import verify_signature
+        verify: `from philiprehberger_webhook_relay_client import verify_signature
 
 def webhook_handler(request):
     raw = request.body                  # bytes — DO NOT json.loads + re-dumps

@@ -37,11 +37,11 @@ export async function POST(request: Request) {
       <h2>Laravel</h2>
       <CodeBlock language="php">
 {`// routes/api.php
-use WebhookRelay\\Client\\WebhookSignature;
+use PhilipRehberger\\WebhookRelayClient\\Signer;
 
 Route::post('/webhooks/relay', function (Request $request) {
     $body = $request->getContent();
-    if (! WebhookSignature::verify(
+    if (! Signer::verify(
         secret: env('WEBHOOK_SECRET'),
         body: $body,
         header: $request->header('X-Webhook-Signature', ''),
@@ -56,7 +56,7 @@ Route::post('/webhooks/relay', function (Request $request) {
       <h2>FastAPI</h2>
       <CodeBlock language="python">
 {`from fastapi import FastAPI, Request, Response
-from webhook_relay import verify_signature
+from philiprehberger_webhook_relay_client import verify_signature
 
 app = FastAPI()
 
