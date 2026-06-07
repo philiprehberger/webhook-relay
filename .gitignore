@@ -41,3 +41,5 @@ Thumbs.db
 /sdks/python/*.egg-info/
 /sdks/python/__pycache__/
 /sdks/python/.pytest_cache/
+
+/web/.deploy-staging/

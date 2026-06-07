@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Footer } from "../components/Footer";
+import { TopNav } from "../components/TopNav";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -13,7 +15,10 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Webhook Relay",
+  title: {
+    default: "Webhook Relay",
+    template: "%s — Webhook Relay",
+  },
   description:
     "Production-shaped webhook delivery infrastructure: HMAC signing, idempotency, retries, dead-letter handling. A portfolio API by Philip Rehberger.",
   robots: { index: false, follow: false },
@@ -29,7 +34,11 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col bg-zinc-950 text-zinc-100 font-sans">
+        <TopNav />
+        <main className="flex-1">{children}</main>
+        <Footer />
+      </body>
     </html>
   );
 }

@@ -10,6 +10,7 @@
     "deploy": "node node_modules/@philiprehberger/next-deploy/dist/cli.js"
   },
   "dependencies": {
+    "@scalar/api-reference-react": "^0.9.42",
     "next": "16.2.7",
     "react": "19.2.4",
     "react-dom": "19.2.4"
