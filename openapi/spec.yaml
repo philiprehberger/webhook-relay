@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Webhook Relay API
-  version: 0.2.0
+  version: 0.3.0
   summary: Production-shaped webhook delivery infrastructure.
   description: |
     Webhook Relay accepts events from your application and fans them out to
@@ -35,6 +35,8 @@ tags:
     description: Manage delivery destinations and signing secrets.
   - name: Deliveries
     description: Per-attempt delivery log for observability and retry.
+  - name: Dead Letters
+    description: Deliveries that exhausted retries or were rejected outright. Inspect and replay.
 
 paths:
   /v1/healthz:
@@ -416,6 +418,111 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /v1/deliveries/{id}/retry:
+    post:
+      summary: Manually retry a delivery
+      description: |
+        Sets the delivery to `pending` and enqueues a fresh delivery attempt
+        immediately. Works regardless of current status. Does not reset
+        `attempts_made` — the new attempt is recorded as the next one in
+        the timeline.
+      operationId: retryDelivery
+      tags: [Deliveries]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated delivery with attempts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/dead-letters:
+    get:
+      summary: List dead-lettered deliveries
+      description: |
+        Returns deliveries with `status=dead` — the human-attention queue.
+        A delivery lands here when:
+          - The subscriber returned 4xx (not retried).
+          - Retries exhausted on 5xx / timeout / connection errors.
+          - The subscription was paused / disabled before the attempt.
+          - The SSRF guard blocked the URL.
+      operationId: listDeadLetters
+      tags: [Dead Letters]
+      parameters:
+        - in: query
+          name: subscription_id
+          schema:
+            type: string
+        - in: query
+          name: since
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: cursor
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 25
+      responses:
+        "200":
+          description: Page of dead-lettered deliveries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/dead-letters/{id}/replay:
+    post:
+      summary: Replay a dead-lettered delivery
+      description: |
+        Resurrects a `status=dead` delivery — sets it back to `pending` and
+        enqueues a fresh attempt. Returns 409 if the delivery is not in the
+        dead-letter state. To retry deliveries in other states use POST
+        /v1/deliveries/{id}/retry instead.
+      operationId: replayDeadLetter
+      tags: [Dead Letters]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Replayed delivery (now pending) with attempts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: Delivery is not dead-lettered.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
 
 components:
   securitySchemes:

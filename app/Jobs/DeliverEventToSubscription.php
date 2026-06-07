@@ -12,6 +12,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 
@@ -21,6 +22,29 @@ class DeliverEventToSubscription implements ShouldQueue
 
     public const TIMEOUT_SECONDS = 15;
     public const BODY_SNIPPET_BYTES = 4096;
+
+    public const MAX_ATTEMPTS = 6;
+
+    /**
+     * Backoff delays (in seconds) BEFORE attempts 2..MAX_ATTEMPTS.
+     * Length = MAX_ATTEMPTS - 1.
+     *
+     * Attempt 1 fires immediately. After it fails, the next attempt is
+     * scheduled BACKOFF[0] seconds later. After attempt N fails, the next
+     * is scheduled at BACKOFF[N-1].
+     *
+     *   attempt 1 -> +30s   -> attempt 2
+     *   attempt 2 -> +2m    -> attempt 3
+     *   attempt 3 -> +10m   -> attempt 4
+     *   attempt 4 -> +1h    -> attempt 5
+     *   attempt 5 -> +6h    -> attempt 6
+     *   attempt 6 -> dead
+     */
+    public const BACKOFF = [30, 120, 600, 3600, 21600];
+
+    public const CIRCUIT_BREAKER_THRESHOLD = 8;
+
+    public int $tries = 1;
 
     public function __construct(
         public readonly string $eventId,
@@ -40,11 +64,13 @@ class DeliverEventToSubscription implements ShouldQueue
 
         $delivery = $this->findOrCreateDelivery($event, $subscription);
 
+        // Terminal states are never replayed by the worker.
+        if (in_array($delivery->status, [Delivery::STATUS_SUCCESS, Delivery::STATUS_DEAD], true)) {
+            return;
+        }
+
         if (! $subscription->isActive()) {
-            $delivery->update([
-                'status' => Delivery::STATUS_DEAD,
-                'completed_at' => now(),
-            ]);
+            $this->markDead($delivery, statusCode: null);
 
             return;
         }
@@ -57,7 +83,6 @@ class DeliverEventToSubscription implements ShouldQueue
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
         $signed = $signer->sign($subscription->signing_secret, $body);
-
         $attemptNumber = $delivery->attempts_made + 1;
         $start = microtime(true);
 
@@ -73,7 +98,9 @@ class DeliverEventToSubscription implements ShouldQueue
                 latencyMs: 0,
                 errorCode: 'ssrf:'.$blocked,
             );
-            $this->finalize($delivery, success: false, statusCode: null);
+            // SSRF block is never retryable — bad URL is on the user.
+            $this->markDead($delivery, statusCode: null);
+            $this->bumpCircuitBreaker($subscription);
 
             return;
         }
@@ -85,7 +112,7 @@ class DeliverEventToSubscription implements ShouldQueue
                 'X-Webhook-Event-Type' => $event->type,
                 'X-Webhook-Timestamp' => (string) $signed['timestamp'],
                 'Content-Type' => 'application/json',
-                'User-Agent' => 'WebhookRelay/0.2 (+https://webhook-relay.dcsuniverse.com)',
+                'User-Agent' => 'WebhookRelay/0.3 (+https://webhook-relay.dcsuniverse.com)',
             ])
                 ->withBody($body, 'application/json')
                 ->timeout(self::TIMEOUT_SECONDS)
@@ -105,11 +132,7 @@ class DeliverEventToSubscription implements ShouldQueue
                 errorCode: null,
             );
 
-            $this->finalize(
-                $delivery,
-                success: $response->successful(),
-                statusCode: $response->status(),
-            );
+            $this->finalize($delivery, $subscription, $response->status());
         } catch (ConnectionException $e) {
             $latencyMs = (int) round((microtime(true) - $start) * 1000);
             $this->recordAttempt(
@@ -122,8 +145,114 @@ class DeliverEventToSubscription implements ShouldQueue
                 latencyMs: $latencyMs,
                 errorCode: 'connection_error',
             );
-            $this->finalize($delivery, success: false, statusCode: null);
+            // Connection errors are 5xx-shaped: retryable.
+            $this->finalize($delivery, $subscription, statusCode: null, transientError: true);
         }
+    }
+
+    /**
+     * Finalize an attempt outcome. Branches:
+     *   - 2xx: success, reset circuit breaker.
+     *   - 4xx: dead (subscriber problem; not retried), bump breaker.
+     *   - 5xx / transient: retry with backoff if attempts remain, else dead.
+     */
+    private function finalize(
+        Delivery $delivery,
+        Subscription $subscription,
+        ?int $statusCode,
+        bool $transientError = false,
+    ): void {
+        $delivery->refresh();
+
+        if ($statusCode !== null && $statusCode >= 200 && $statusCode < 300) {
+            $delivery->update([
+                'status' => Delivery::STATUS_SUCCESS,
+                'final_status_code' => $statusCode,
+                'completed_at' => now(),
+                'next_attempt_at' => null,
+            ]);
+            $this->resetCircuitBreaker($subscription);
+
+            return;
+        }
+
+        // 4xx: subscriber error, terminal, no retries.
+        if ($statusCode !== null && $statusCode >= 400 && $statusCode < 500) {
+            $this->markDead($delivery, statusCode: $statusCode);
+            $this->bumpCircuitBreaker($subscription);
+
+            return;
+        }
+
+        // 5xx or transient (timeout/connection): retry with backoff.
+        $this->bumpCircuitBreaker($subscription);
+
+        if ($delivery->attempts_made >= self::MAX_ATTEMPTS) {
+            $this->markDead($delivery, statusCode: $statusCode);
+
+            return;
+        }
+
+        $delaySeconds = self::BACKOFF[$delivery->attempts_made - 1] ?? null;
+        if ($delaySeconds === null) {
+            // Defensive: out of bounds means we should be dead by now.
+            $this->markDead($delivery, statusCode: $statusCode);
+
+            return;
+        }
+
+        $nextAt = now()->addSeconds($delaySeconds);
+        $delivery->update([
+            'status' => Delivery::STATUS_PENDING,
+            'final_status_code' => $statusCode,
+            'next_attempt_at' => $nextAt,
+        ]);
+
+        self::dispatch($this->eventId, $this->subscriptionId)
+            ->delay($nextAt);
+    }
+
+    private function markDead(Delivery $delivery, ?int $statusCode): void
+    {
+        $delivery->update([
+            'status' => Delivery::STATUS_DEAD,
+            'final_status_code' => $statusCode,
+            'completed_at' => now(),
+            'next_attempt_at' => null,
+        ]);
+    }
+
+    /**
+     * Atomically increment consecutive_failures and, if the threshold is
+     * crossed for the first time, pause the subscription.
+     */
+    private function bumpCircuitBreaker(Subscription $subscription): void
+    {
+        DB::transaction(function () use ($subscription) {
+            $fresh = Subscription::lockForUpdate()->find($subscription->id);
+            if ($fresh === null) {
+                return;
+            }
+
+            $fresh->increment('consecutive_failures');
+
+            if (
+                $fresh->isActive()
+                && $fresh->consecutive_failures >= self::CIRCUIT_BREAKER_THRESHOLD
+            ) {
+                $fresh->update([
+                    'state' => Subscription::STATE_PAUSED,
+                    'paused_at' => now(),
+                ]);
+            }
+        });
+    }
+
+    private function resetCircuitBreaker(Subscription $subscription): void
+    {
+        Subscription::where('id', $subscription->id)
+            ->where('consecutive_failures', '>', 0)
+            ->update(['consecutive_failures' => 0]);
     }
 
     private function findOrCreateDelivery(Event $event, Subscription $subscription): Delivery
@@ -163,34 +292,6 @@ class DeliverEventToSubscription implements ShouldQueue
         $delivery->increment('attempts_made');
     }
 
-    private function finalize(Delivery $delivery, bool $success, ?int $statusCode): void
-    {
-        $delivery->refresh();
-
-        if ($success) {
-            $delivery->update([
-                'status' => Delivery::STATUS_SUCCESS,
-                'final_status_code' => $statusCode,
-                'completed_at' => now(),
-                'next_attempt_at' => null,
-            ]);
-
-            return;
-        }
-
-        // Phase 3 scope: single attempt, no retry yet (Phase 4 adds backoff).
-        $delivery->update([
-            'status' => Delivery::STATUS_FAILED,
-            'final_status_code' => $statusCode,
-            'completed_at' => now(),
-            'next_attempt_at' => null,
-        ]);
-    }
-
-    /**
-     * Keep only the response headers worth showing in the dashboard —
-     * upstream response can include security tokens we don't want to store.
-     */
     private function whitelistHeaders(Response $response): array
     {
         $keep = [

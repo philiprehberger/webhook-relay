@@ -88,8 +88,9 @@ class DeliveryJobTest extends TestCase
         });
     }
 
-    public function test_failing_5xx_marks_delivery_failed(): void
+    public function test_5xx_keeps_delivery_pending_and_schedules_retry(): void
     {
+        \Illuminate\Support\Facades\Queue::fake();
         Http::fake(['hooks.example.com/*' => Http::response('boom', 503)]);
 
         $event = Event::create([
@@ -104,8 +105,11 @@ class DeliveryJobTest extends TestCase
         );
 
         $delivery = Delivery::firstWhere('event_id', $event->id);
-        $this->assertSame(Delivery::STATUS_FAILED, $delivery->status);
+        $this->assertSame(Delivery::STATUS_PENDING, $delivery->status);
         $this->assertSame(503, $delivery->final_status_code);
+        $this->assertNotNull($delivery->next_attempt_at);
+
+        \Illuminate\Support\Facades\Queue::assertPushed(DeliverEventToSubscription::class);
     }
 
     public function test_private_ip_url_is_blocked_by_ssrf_guard(): void
@@ -129,7 +133,8 @@ class DeliveryJobTest extends TestCase
         Http::assertNothingSent();
 
         $delivery = Delivery::firstWhere('event_id', $event->id);
-        $this->assertSame(Delivery::STATUS_FAILED, $delivery->status);
+        // SSRF block is terminal — straight to dead-letter, no retries.
+        $this->assertSame(Delivery::STATUS_DEAD, $delivery->status);
 
         $attempt = $delivery->attempts()->first();
         $this->assertStringStartsWith('ssrf:', $attempt->error_code);

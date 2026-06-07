@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\DeadLettersController;
 use App\Http\Controllers\Api\DeliveriesController;
 use App\Http\Controllers\Api\EventsController;
 use App\Http\Controllers\Api\HealthController;
@@ -25,5 +26,9 @@ Route::prefix('v1')->group(function () {
 
         Route::get('deliveries', [DeliveriesController::class, 'index'])->name('v1.deliveries.index');
         Route::get('deliveries/{id}', [DeliveriesController::class, 'show'])->name('v1.deliveries.show');
+        Route::post('deliveries/{id}/retry', [DeliveriesController::class, 'retry'])->name('v1.deliveries.retry');
+
+        Route::get('dead-letters', [DeadLettersController::class, 'index'])->name('v1.dead-letters.index');
+        Route::post('dead-letters/{id}/replay', [DeadLettersController::class, 'replay'])->name('v1.dead-letters.replay');
     });
 });
