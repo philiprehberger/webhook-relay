@@ -5,9 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\EventResource;
 use App\Http\Responses\ProblemResponse;
+use App\Jobs\DeliverEventToSubscription;
+use App\Models\Delivery;
 use App\Models\Event;
 use App\Models\IdempotencyRecord;
 use App\Models\Workspace;
+use App\Services\SubscriptionMatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +78,8 @@ class EventsController extends Controller
                 'source_ip' => $request->ip(),
             ]);
 
+            $this->dispatchFanOut($event);
+
             $responseBody = (new EventResource($event))->resolve();
 
             if ($idempotencyKey !== null) {
@@ -91,6 +96,30 @@ class EventsController extends Controller
 
             return new JsonResponse(data: $responseBody, status: 202);
         });
+    }
+
+    /**
+     * For every matching subscription, create a pending Delivery row and
+     * enqueue a DeliverEventToSubscription job. Dispatch is gated on
+     * afterCommit so we never enqueue work for a rolled-back event.
+     */
+    private function dispatchFanOut(Event $event): void
+    {
+        $subscriptions = app(SubscriptionMatcher::class)->matchingSubscriptions($event);
+
+        foreach ($subscriptions as $subscription) {
+            Delivery::firstOrCreate(
+                ['event_id' => $event->id, 'subscription_id' => $subscription->id],
+                [
+                    'workspace_id' => $event->workspace_id,
+                    'status' => Delivery::STATUS_PENDING,
+                    'attempts_made' => 0,
+                ],
+            );
+
+            DeliverEventToSubscription::dispatch($event->id, $subscription->id)
+                ->afterCommit();
+        }
     }
 
     public function index(Request $request): JsonResponse

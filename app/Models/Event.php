@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Event extends Model
 {
@@ -38,17 +39,26 @@ class Event extends Model
         return $this->belongsTo(Workspace::class);
     }
 
+    public function deliveries(): HasMany
+    {
+        return $this->hasMany(Delivery::class);
+    }
+
     /**
-     * Per-event delivery summary. Until Phase 3 ships fan-out + delivery
-     * tracking, every counter is 0.
+     * Per-event delivery summary aggregated from the deliveries table.
      */
     public function deliveriesSummary(): array
     {
+        $counts = $this->deliveries()
+            ->selectRaw('status, count(*) as n')
+            ->groupBy('status')
+            ->pluck('n', 'status');
+
         return [
-            'total' => 0,
-            'succeeded' => 0,
-            'failed' => 0,
-            'pending' => 0,
+            'total' => (int) $counts->sum(),
+            'succeeded' => (int) ($counts[Delivery::STATUS_SUCCESS] ?? 0),
+            'failed' => (int) (($counts[Delivery::STATUS_FAILED] ?? 0) + ($counts[Delivery::STATUS_DEAD] ?? 0)),
+            'pending' => (int) ($counts[Delivery::STATUS_PENDING] ?? 0),
         ];
     }
 }

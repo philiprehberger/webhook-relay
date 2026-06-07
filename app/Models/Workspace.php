@@ -26,4 +26,9 @@ class Workspace extends Model
     {
         return $this->hasMany(IdempotencyRecord::class);
     }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class);
+    }
 }
