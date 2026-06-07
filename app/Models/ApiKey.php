@@ -44,8 +44,8 @@ class ApiKey extends Model
      */
     public static function mint(Workspace $workspace, string $env = 'live', ?string $name = null): array
     {
-        if (! in_array($env, ['live', 'test'], true)) {
-            throw new \InvalidArgumentException("env must be 'live' or 'test'");
+        if (! in_array($env, ['live', 'test', 'sandbox'], true)) {
+            throw new \InvalidArgumentException("env must be 'live', 'test', or 'sandbox'");
         }
 
         $prefix = "whk_{$env}_";
@@ -83,5 +83,10 @@ class ApiKey extends Model
     public function isLive(): Attribute
     {
         return Attribute::get(fn () => $this->prefix === 'whk_live_');
+    }
+
+    public function isSandbox(): Attribute
+    {
+        return Attribute::get(fn () => $this->prefix === 'whk_sandbox_');
     }
 }

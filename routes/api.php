@@ -2,14 +2,18 @@
 
 use App\Http\Controllers\Api\DeadLettersController;
 use App\Http\Controllers\Api\DeliveriesController;
+use App\Http\Controllers\Api\EchoStreamController;
 use App\Http\Controllers\Api\EventsController;
 use App\Http\Controllers\Api\HealthController;
+use App\Http\Controllers\Api\SandboxKeysController;
 use App\Http\Controllers\Api\SubscriptionsController;
 use App\Http\Controllers\Api\WebhookTestController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     Route::get('healthz', HealthController::class)->name('v1.healthz');
+    Route::post('sandbox/keys', SandboxKeysController::class)->name('v1.sandbox.keys');
+    Route::get('echo/stream', EchoStreamController::class)->name('v1.echo.stream');
 
     Route::middleware(['api.key', 'workspace.rate-limit'])->group(function () {
         Route::post('events', [EventsController::class, 'store'])->name('v1.events.store');

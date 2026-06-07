@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Responses\ProblemResponse;
+use App\Models\ApiKey;
+use App\Services\SandboxAllowlist;
 use App\Services\SsrfGuard;
 use App\Services\WebhookSigner;
 use Illuminate\Http\Client\ConnectionException;
@@ -30,6 +32,16 @@ class WebhookTestController
             'payload' => ['nullable', 'array'],
             'event_type' => ['nullable', 'string', 'regex:/^[a-z0-9._-]{1,128}$/'],
         ]);
+
+        /** @var ApiKey|null $apiKey */
+        $apiKey = $request->attributes->get('api_key');
+        if ($apiKey && $apiKey->is_sandbox && ! SandboxAllowlist::isAllowed($validated['url'])) {
+            return new ProblemResponse(
+                status: 400,
+                title: 'URL not allowed for sandbox keys',
+                detail: 'Sandbox keys can probe only webhook.site, requestbin.com, or httpbin.org.',
+            );
+        }
 
         $blocked = $ssrf->check($validated['url']);
         if ($blocked !== null) {

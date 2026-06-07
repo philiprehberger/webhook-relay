@@ -10,7 +10,24 @@ class Workspace extends Model
 {
     use HasUlids;
 
-    protected $fillable = ['name', 'slug'];
+    protected $fillable = ['name', 'slug', 'is_sandbox'];
+
+    protected function casts(): array
+    {
+        return ['is_sandbox' => 'boolean'];
+    }
+
+    /**
+     * The singleton "Public Sandbox" workspace that anonymous docs-site
+     * visitors get keys against. Created on first call.
+     */
+    public static function sandbox(): self
+    {
+        return static::firstOrCreate(
+            ['slug' => 'public-sandbox'],
+            ['name' => 'Public Sandbox', 'is_sandbox' => true],
+        );
+    }
 
     public function apiKeys(): HasMany
     {

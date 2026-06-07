@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Webhook Relay API
-  version: 0.4.0
+  version: 0.5.0
   summary: Production-shaped webhook delivery infrastructure.
   description: |
     Webhook Relay accepts events from your application and fans them out to
@@ -39,6 +39,35 @@ tags:
     description: Deliveries that exhausted retries or were rejected outright. Inspect and replay.
 
 paths:
+  /v1/echo/stream:
+    get:
+      summary: Live Echo SSE stream
+      description: |
+        Server-Sent Events stream of delivery updates for the workspace
+        identified by `?key=`. Each event has type `delivery` with a JSON
+        payload of the delivery's current state. Stream caps at 60 seconds;
+        reconnect for the next window.
+
+        Browsers / EventSource clients should use the query string for the
+        key since EventSource does not support custom Authorization headers.
+      operationId: echoStream
+      tags: [Deliveries]
+      security: []
+      parameters:
+        - in: query
+          name: key
+          required: true
+          schema:
+            type: string
+          description: Bearer-style API key (whk_sandbox_, whk_test_, or whk_live_).
+      responses:
+        "200":
+          description: SSE stream of delivery updates.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+
   /v1/healthz:
     get:
       summary: Liveness check

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Webhook Relay API",
-    "version": "0.4.0",
+    "version": "0.5.0",
     "summary": "Production-shaped webhook delivery infrastructure.",
     "description": "Webhook Relay accepts events from your application and fans them out to\nsubscriber endpoints with HMAC signing, idempotency-key dedup,\nexponential-backoff retries, dead-letter handling, and per-attempt\nobservability.\n\nThis spec is the source of truth for the API. Controllers conform to it;\nSDKs are generated from it. Run `npx @stoplight/spectral-cli lint\nopenapi/spec.yaml` to validate locally.\n",
     "contact": {
@@ -48,6 +48,40 @@
     }
   ],
   "paths": {
+    "/v1/echo/stream": {
+      "get": {
+        "summary": "Live Echo SSE stream",
+        "description": "Server-Sent Events stream of delivery updates for the workspace\nidentified by `?key=`. Each event has type `delivery` with a JSON\npayload of the delivery's current state. Stream caps at 60 seconds;\nreconnect for the next window.\n\nBrowsers / EventSource clients should use the query string for the\nkey since EventSource does not support custom Authorization headers.\n",
+        "operationId": "echoStream",
+        "tags": [
+          "Deliveries"
+        ],
+        "security": [],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Bearer-style API key (whk_sandbox_, whk_test_, or whk_live_)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "SSE stream of delivery updates.",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/healthz": {
       "get": {
         "summary": "Liveness check",

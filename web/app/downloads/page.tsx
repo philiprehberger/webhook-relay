@@ -26,6 +26,13 @@ const SPEC = [
     badge: ".json",
     size: "299 KB",
   },
+  {
+    title: "API reference",
+    href: `/openapi-reference-${VERSION}.pdf`,
+    blurb: "Print-ready PDF of the full reference, rendered from the Scalar view. Pre-rendered so you don't have to print the docs site yourself.",
+    badge: ".pdf",
+    size: "8.7 MB",
+  },
 ];
 
 const SDKS = [
@@ -78,7 +85,7 @@ export default function Downloads() {
 
       <section className="mb-12">
         <h2 className="text-xl font-semibold mb-4">API specification</h2>
-        <div className="grid sm:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {SPEC.map((s) => (
             <a
               key={s.href}
@@ -140,23 +147,17 @@ export default function Downloads() {
       </section>
 
       <section className="rounded-md border border-zinc-800 bg-zinc-900/30 p-5">
-        <p className="text-sm text-zinc-300 mb-2">
-          <strong className="text-zinc-100">Need a PDF?</strong>{" "}
-          The{" "}
-          <Link href="/reference" className="text-sky-300 hover:underline underline-offset-4">
-            interactive reference
-          </Link>{" "}
-          renders the full spec — your browser&apos;s &ldquo;Save as PDF&rdquo;
-          captures it. A pre-rendered PDF is on the roadmap if there&apos;s
-          demand.
-        </p>
         <p className="text-sm text-zinc-300">
           <strong className="text-zinc-100">Regenerate locally?</strong>{" "}
           Clone the repo and run{" "}
           <code className="text-sky-200 bg-sky-300/10 px-1.5 py-0.5 rounded text-xs font-mono">
-            bash scripts/build-sdk-zips.sh
+            npm run sdk:zip
           </code>
-          {" "}— every artifact on this page is reproducible.
+          {" "}for the SDK archives and{" "}
+          <code className="text-sky-200 bg-sky-300/10 px-1.5 py-0.5 rounded text-xs font-mono">
+            npm run docs:pdf
+          </code>
+          {" "}for the reference PDF. Every artifact on this page is reproducible.
         </p>
       </section>
     </div>

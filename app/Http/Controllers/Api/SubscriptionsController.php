@@ -5,23 +5,36 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\SubscriptionResource;
 use App\Http\Responses\ProblemResponse;
+use App\Models\ApiKey;
 use App\Models\Subscription;
 use App\Models\Workspace;
+use App\Services\SandboxAllowlist;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SubscriptionsController extends Controller
 {
-    public function store(Request $request): JsonResponse
+    public function store(Request $request): JsonResponse|ProblemResponse
     {
         /** @var Workspace $workspace */
         $workspace = $request->attributes->get('workspace');
+        /** @var ApiKey|null $apiKey */
+        $apiKey = $request->attributes->get('api_key');
 
         $validated = $request->validate([
             'name' => ['nullable', 'string', 'max:255'],
             'url' => ['required', 'url', 'starts_with:https://', 'max:2048'],
             'event_filter' => ['nullable', 'string', 'max:128', 'regex:/^[a-z0-9._*-]+$/'],
         ]);
+
+        // Sandbox keys are scoped to receiver-testing services only.
+        if ($apiKey && $apiKey->is_sandbox && ! SandboxAllowlist::isAllowed($validated['url'])) {
+            return new ProblemResponse(
+                status: 400,
+                title: 'URL not allowed for sandbox keys',
+                detail: 'Sandbox subscriptions can only deliver to webhook.site, requestbin.com, or httpbin.org. Use a live or test key to subscribe to any other URL.',
+            );
+        }
 
         $plaintextSecret = Subscription::generateSecret();
 

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CodeBlock } from "../components/CodeBlock";
+import { LiveEcho } from "../components/LiveEcho";
 
 export default function Home() {
   return (
@@ -86,6 +87,18 @@ if (!ok) return new Response("Bad signature", { status: 400 });`}
             </div>
           ))}
         </div>
+      </section>
+
+      <section className="mx-auto max-w-5xl px-6 pb-24 border-t border-zinc-900 pt-16">
+        <h2 className="text-2xl font-semibold mb-2">See it work, live.</h2>
+        <p className="text-zinc-400 mb-8 max-w-2xl">
+          Paste a sandbox key from the{" "}
+          <Link href="/reference" className="text-sky-300 hover:underline underline-offset-4">
+            reference page
+          </Link>{" "}
+          and watch deliveries stream in real time via Server-Sent Events.
+        </p>
+        <LiveEcho />
       </section>
 
       <section className="mx-auto max-w-5xl px-6 pb-24 border-t border-zinc-900 pt-16">

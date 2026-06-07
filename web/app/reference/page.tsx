@@ -2,10 +2,12 @@
 
 import { ApiReferenceReact } from "@scalar/api-reference-react";
 import "@scalar/api-reference-react/style.css";
+import { SandboxKeyBanner } from "../../components/SandboxKeyBanner";
 
 export default function Reference() {
   return (
-    <div className="-mx-0">
+    <div>
+      <SandboxKeyBanner />
       <ApiReferenceReact
         configuration={{
           url: "/openapi.yaml",
