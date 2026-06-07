@@ -5,12 +5,13 @@ use App\Http\Controllers\Api\DeliveriesController;
 use App\Http\Controllers\Api\EventsController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\SubscriptionsController;
+use App\Http\Controllers\Api\WebhookTestController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function () {
     Route::get('healthz', HealthController::class)->name('v1.healthz');
 
-    Route::middleware('api.key')->group(function () {
+    Route::middleware(['api.key', 'workspace.rate-limit'])->group(function () {
         Route::post('events', [EventsController::class, 'store'])->name('v1.events.store');
         Route::get('events', [EventsController::class, 'index'])->name('v1.events.index');
         Route::get('events/{id}', [EventsController::class, 'show'])->name('v1.events.show');
@@ -30,5 +31,7 @@ Route::prefix('v1')->group(function () {
 
         Route::get('dead-letters', [DeadLettersController::class, 'index'])->name('v1.dead-letters.index');
         Route::post('dead-letters/{id}/replay', [DeadLettersController::class, 'replay'])->name('v1.dead-letters.replay');
+
+        Route::post('webhooks/test', WebhookTestController::class)->name('v1.webhooks.test');
     });
 });

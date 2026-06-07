@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: Webhook Relay API
-  version: 0.3.0
+  version: 0.4.0
   summary: Production-shaped webhook delivery infrastructure.
   description: |
     Webhook Relay accepts events from your application and fans them out to
@@ -489,6 +489,80 @@ paths:
                 $ref: "#/components/schemas/DeliveryPage"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /v1/webhooks/test:
+    post:
+      summary: Ping a webhook URL
+      description: |
+        Sends one synchronously signed sample event to the URL you provide
+        and returns the response. No subscription is created; nothing is
+        stored. Used by the docs-site try-it widget so prospects can probe
+        their own endpoints before subscribing. Subject to the workspace
+        rate limit.
+
+        The SSRF guard applies: private / loopback / link-local IPs are
+        rejected with 400.
+      operationId: testWebhook
+      tags: [Events]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  pattern: "^https://"
+                  description: HTTPS endpoint to probe.
+                secret:
+                  type: string
+                  description: Optional signing secret. If omitted, a random one is generated and returned.
+                event_type:
+                  type: string
+                  pattern: "^[a-z0-9._-]{1,128}$"
+                  default: test.ping
+                payload:
+                  type: object
+                  description: Optional payload, defaults to `{"hello":"from-webhook-relay"}`.
+      responses:
+        "200":
+          description: Probe completed (regardless of receiver's HTTP status).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, signature_sent, secret_used]
+                properties:
+                  ok: { type: boolean }
+                  status:
+                    type: integer
+                    nullable: true
+                    description: Receiver's HTTP status, null on connection error.
+                  latency_ms: { type: integer }
+                  response_body_snippet:
+                    type: string
+                    nullable: true
+                    description: First 4 KB of the receiver's response body.
+                  signature_sent:
+                    type: string
+                    description: The exact X-Webhook-Signature header sent — the prospect verifies their own code against this.
+                  secret_used:
+                    type: string
+                  error_code:
+                    type: string
+                    nullable: true
+                  error_detail:
+                    type: string
+                    nullable: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/RateLimited"
 
   /v1/dead-letters/{id}/replay:
     post:
