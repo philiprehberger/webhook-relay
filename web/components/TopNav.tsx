@@ -12,7 +12,7 @@ const NAV = [
 
 export function TopNav() {
   return (
-    <header className="border-b border-zinc-800/80 bg-zinc-950/80 backdrop-blur sticky top-0 z-40">
+    <header className="border-b border-zinc-800 bg-zinc-950 sticky top-0 z-40">
       <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between">
         <Link
           href="/"
@@ -25,7 +25,7 @@ export function TopNav() {
             <Link
               key={item.href}
               href={item.href}
-              className="text-zinc-400 hover:text-zinc-100 transition-colors"
+              className="text-zinc-300 hover:text-zinc-100 transition-colors"
             >
               {item.label}
             </Link>
