@@ -1,0 +1,29 @@
+{
+  "name": "@philiprehberger/webhook-relay-client",
+  "version": "0.3.0",
+  "description": "TypeScript SDK + signature verifier for the Webhook Relay API.",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test src/verifySignature.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "tsx": "^4",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/philiprehberger/webhook-relay.git",
+    "directory": "sdks/typescript"
+  },
+  "license": "MIT"
+}

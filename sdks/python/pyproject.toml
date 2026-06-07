@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "webhook-relay-client"
+version = "0.3.0"
+description = "Python SDK + signature verifier for the Webhook Relay API."
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.10"
+authors = [
+  { name = "Philip Rehberger", email = "admin@philiprehberger.com" },
+]
+keywords = ["webhook", "webhook-relay", "hmac", "api-client"]
+dependencies = []
+
+[project.urls]
+Homepage = "https://webhook-relay.dcsuniverse.com"
+Source = "https://github.com/philiprehberger/webhook-relay/tree/main/sdks/python"
+
+[project.optional-dependencies]
+generated = ["urllib3>=2.1.0", "python-dateutil>=2.8.2", "pydantic>=2", "typing-extensions>=4.7.1"]
+test = ["pytest>=8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["webhook_relay"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

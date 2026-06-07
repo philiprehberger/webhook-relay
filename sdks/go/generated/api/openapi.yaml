@@ -1,0 +1,1136 @@
+openapi: 3.1.0
+info:
+  contact:
+    name: Philip Rehberger
+    url: https://webhook-relay.dcsuniverse.com
+  description: |
+    Webhook Relay accepts events from your application and fans them out to
+    subscriber endpoints with HMAC signing, idempotency-key dedup,
+    exponential-backoff retries, dead-letter handling, and per-attempt
+    observability.
+
+    This spec is the source of truth for the API. Controllers conform to it;
+    SDKs are generated from it. Run `npx @stoplight/spectral-cli lint
+    openapi/spec.yaml` to validate locally.
+  license:
+    name: MIT
+  title: Webhook Relay API
+  version: 0.3.0
+servers:
+- description: Production
+  url: https://api.webhook-relay.dcsuniverse.com
+- description: Local development
+  url: http://localhost:8000
+security:
+- ApiKeyAuth: []
+tags:
+- description: "Ingest, list, and retrieve events."
+  name: Events
+- description: Manage delivery destinations and signing secrets.
+  name: Subscriptions
+- description: Per-attempt delivery log for observability and retry.
+  name: Deliveries
+- description: Deliveries that exhausted retries or were rejected outright. Inspect
+    and replay.
+  name: Dead Letters
+paths:
+  /v1/healthz:
+    get:
+      description: Returns 200 if the API is up. Does not require auth.
+      operationId: healthz
+      responses:
+        "200":
+          content:
+            application/json:
+              example:
+                status: healthy
+                version: 0.2.0
+              schema:
+                $ref: "#/components/schemas/healthz_200_response"
+          description: Service is up.
+      security: []
+      summary: Liveness check
+      tags:
+      - Events
+  /v1/events:
+    get:
+      description: "Returns a cursor-paginated page of events, newest first, scoped\
+        \ to the caller's workspace."
+      operationId: listEvents
+      parameters:
+      - description: Filter by event type (exact match).
+        explode: true
+        in: query
+        name: type
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: created_after
+        required: false
+        schema:
+          format: date-time
+          type: string
+        style: form
+      - description: Opaque cursor from a prior page's `next_cursor`.
+        explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 25
+          maximum: 100
+          minimum: 1
+          type: integer
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EventPage"
+          description: "Page of events, newest first."
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+      summary: List events
+      tags:
+      - Events
+    post:
+      description: |
+        Accepts an event and enqueues it for fan-out to all matching
+        subscriptions. Provide an `Idempotency-Key` header to safely retry;
+        dedup window is 24 hours per workspace.
+      operationId: createEvent
+      parameters:
+      - description: Optional dedup key; requests with the same key within 24h return
+          the original response.
+        explode: false
+        in: header
+        name: Idempotency-Key
+        required: false
+        schema:
+          maxLength: 255
+          type: string
+        style: simple
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EventCreate"
+        required: true
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+          description: Event accepted for fan-out.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Idempotency key already used with a different payload.
+        "429":
+          $ref: "#/components/responses/RateLimited"
+      summary: Ingest an event
+      tags:
+      - Events
+  /v1/events/{id}:
+    get:
+      description: Returns the event and a summary of its deliveries across all matching
+        subscriptions.
+      operationId: getEvent
+      parameters:
+      - description: ULID of the event.
+        explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Event"
+          description: The event with a delivery summary.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Retrieve an event
+      tags:
+      - Events
+  /v1/subscriptions:
+    get:
+      description: "Cursor-paginated, scoped to the caller's workspace."
+      operationId: listSubscriptions
+      parameters:
+      - explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 25
+          maximum: 100
+          minimum: 1
+          type: integer
+        style: form
+      - explode: true
+        in: query
+        name: state
+        required: false
+        schema:
+          enum:
+          - active
+          - paused
+          - disabled
+          type: string
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionPage"
+          description: Page of subscriptions.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+      summary: List subscriptions
+      tags:
+      - Subscriptions
+    post:
+      description: |
+        Registers a new endpoint to receive matching events. The signing
+        secret is generated server-side and returned ONCE in the response —
+        store it now; you cannot retrieve it later (only rotate it).
+      operationId: createSubscription
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionCreate"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionWithSecret"
+          description: Subscription created.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+      summary: Create a subscription
+      tags:
+      - Subscriptions
+  /v1/subscriptions/{id}:
+    delete:
+      description: Permanently deletes the subscription. Deliveries are retained for
+        audit.
+      operationId: deleteSubscription
+      parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Delete a subscription
+      tags:
+      - Subscriptions
+    get:
+      description: Returns a single subscription without its signing secret.
+      operationId: getSubscription
+      parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+          description: The subscription.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Retrieve a subscription
+      tags:
+      - Subscriptions
+    patch:
+      description: "Partial update. Mutable fields are name, url, event_filter."
+      operationId: updateSubscription
+      parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubscriptionUpdate"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+          description: Updated subscription.
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Update a subscription
+      tags:
+      - Subscriptions
+  /v1/subscriptions/{id}/pause:
+    post:
+      description: Stops new deliveries until resumed. Existing in-flight deliveries
+        are not cancelled.
+      operationId: pauseSubscription
+      parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+          description: Paused.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Pause a subscription
+      tags:
+      - Subscriptions
+  /v1/subscriptions/{id}/resume:
+    post:
+      description: Resets consecutive_failures to 0 and returns the subscription to
+        active state.
+      operationId: resumeSubscription
+      parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscription"
+          description: Resumed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Resume a paused subscription
+      tags:
+      - Subscriptions
+  /v1/subscriptions/{id}/rotate-secret:
+    post:
+      description: |
+        Generates a new secret and returns it once. The previous secret
+        remains valid for a 48-hour grace window so receivers can update
+        their verifier without losing requests.
+      operationId: rotateSubscriptionSecret
+      parameters:
+      - $ref: "#/components/parameters/SubscriptionId"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubscriptionWithSecret"
+          description: Rotated.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Rotate the signing secret
+      tags:
+      - Subscriptions
+  /v1/deliveries:
+    get:
+      description: "Cursor-paginated, newest first, scoped to the caller's workspace."
+      operationId: listDeliveries
+      parameters:
+      - explode: true
+        in: query
+        name: event_id
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: subscription_id
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: status
+        required: false
+        schema:
+          enum:
+          - pending
+          - success
+          - failed
+          - dead
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 25
+          maximum: 100
+          minimum: 1
+          type: integer
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryPage"
+          description: Page of deliveries.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+      summary: List deliveries
+      tags:
+      - Deliveries
+  /v1/deliveries/{id}:
+    get:
+      description: Returns the delivery with its full attempt timeline.
+      operationId: getDelivery
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+          description: The delivery with attempts.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Retrieve a delivery
+      tags:
+      - Deliveries
+  /v1/deliveries/{id}/retry:
+    post:
+      description: |
+        Sets the delivery to `pending` and enqueues a fresh delivery attempt
+        immediately. Works regardless of current status. Does not reset
+        `attempts_made` — the new attempt is recorded as the next one in
+        the timeline.
+      operationId: retryDelivery
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+          description: Updated delivery with attempts.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Manually retry a delivery
+      tags:
+      - Deliveries
+  /v1/dead-letters:
+    get:
+      description: |
+        Returns deliveries with `status=dead` — the human-attention queue.
+        A delivery lands here when:
+          - The subscriber returned 4xx (not retried).
+          - Retries exhausted on 5xx / timeout / connection errors.
+          - The subscription was paused / disabled before the attempt.
+          - The SSRF guard blocked the URL.
+      operationId: listDeadLetters
+      parameters:
+      - explode: true
+        in: query
+        name: subscription_id
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: since
+        required: false
+        schema:
+          format: date-time
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: cursor
+        required: false
+        schema:
+          type: string
+        style: form
+      - explode: true
+        in: query
+        name: limit
+        required: false
+        schema:
+          default: 25
+          maximum: 100
+          minimum: 1
+          type: integer
+        style: form
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeliveryPage"
+          description: Page of dead-lettered deliveries.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+      summary: List dead-lettered deliveries
+      tags:
+      - Dead Letters
+  /v1/dead-letters/{id}/replay:
+    post:
+      description: |
+        Resurrects a `status=dead` delivery — sets it back to `pending` and
+        enqueues a fresh attempt. Returns 409 if the delivery is not in the
+        dead-letter state. To retry deliveries in other states use POST
+        /v1/deliveries/{id}/retry instead.
+      operationId: replayDeadLetter
+      parameters:
+      - explode: false
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+        style: simple
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Delivery"
+          description: Replayed delivery (now pending) with attempts.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+          description: Delivery is not dead-lettered.
+      summary: Replay a dead-lettered delivery
+      tags:
+      - Dead Letters
+components:
+  parameters:
+    SubscriptionId:
+      description: ULID of the subscription.
+      explode: false
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+      style: simple
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: Validation error.
+    Unauthorized:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: Missing or invalid API key.
+    NotFound:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: Resource not found in this workspace.
+    RateLimited:
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+      description: Workspace rate limit exceeded.
+      headers:
+        X-RateLimit-Limit:
+          explode: false
+          schema:
+            type: integer
+          style: simple
+        X-RateLimit-Remaining:
+          explode: false
+          schema:
+            type: integer
+          style: simple
+        X-RateLimit-Reset:
+          explode: false
+          schema:
+            description: Unix timestamp at which the bucket refills.
+            type: integer
+          style: simple
+  schemas:
+    EventCreate:
+      example:
+        payload:
+          key: ""
+        type: order.created
+      properties:
+        type:
+          description: Dot-separated event type.
+          example: order.created
+          pattern: "^[a-z0-9._-]{1,128}$"
+          type: string
+        payload:
+          additionalProperties: true
+          description: "Arbitrary JSON payload, max 256 KB serialized."
+          type: object
+      required:
+      - payload
+      - type
+    Event:
+      example:
+        payload:
+          key: ""
+        deliveries_summary:
+          total: 0
+          pending: 5
+          failed: 1
+          succeeded: 6
+        idempotency_key: idempotency_key
+        created_at: 2000-01-23T04:56:07.000+00:00
+        id: 01JAB3K5XYZQRSTUVWXYZABCDE
+        type: order.created
+        source_ip: source_ip
+      properties:
+        id:
+          example: 01JAB3K5XYZQRSTUVWXYZABCDE
+          type: string
+        type:
+          example: order.created
+          type: string
+        payload:
+          additionalProperties: true
+          type: object
+        idempotency_key:
+          type: string
+          nullable: true
+        source_ip:
+          type: string
+          nullable: true
+        created_at:
+          format: date-time
+          type: string
+        deliveries_summary:
+          $ref: "#/components/schemas/Event_deliveries_summary"
+      required:
+      - created_at
+      - deliveries_summary
+      - id
+      - payload
+      - type
+    EventPage:
+      example:
+        next_cursor: next_cursor
+        data:
+        - payload:
+            key: ""
+          deliveries_summary:
+            total: 0
+            pending: 5
+            failed: 1
+            succeeded: 6
+          idempotency_key: idempotency_key
+          created_at: 2000-01-23T04:56:07.000+00:00
+          id: 01JAB3K5XYZQRSTUVWXYZABCDE
+          type: order.created
+          source_ip: source_ip
+        - payload:
+            key: ""
+          deliveries_summary:
+            total: 0
+            pending: 5
+            failed: 1
+            succeeded: 6
+          idempotency_key: idempotency_key
+          created_at: 2000-01-23T04:56:07.000+00:00
+          id: 01JAB3K5XYZQRSTUVWXYZABCDE
+          type: order.created
+          source_ip: source_ip
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/Event"
+          type: array
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - data
+      - next_cursor
+    SubscriptionCreate:
+      example:
+        name: name
+        url: https://openapi-generator.tech
+        event_filter: '*'
+      properties:
+        name:
+          maxLength: 255
+          type: string
+        url:
+          description: HTTPS endpoint to receive deliveries.
+          format: uri
+          pattern: ^https://
+          type: string
+        event_filter:
+          default: '*'
+          description: |
+            "*" matches all events, otherwise an exact type or a glob
+            like "order.*". Glob uses "*" as a wildcard segment.
+          type: string
+      required:
+      - url
+    SubscriptionUpdate:
+      example:
+        name: name
+        url: https://openapi-generator.tech
+        event_filter: event_filter
+      properties:
+        name:
+          type: string
+        url:
+          format: uri
+          pattern: ^https://
+          type: string
+        event_filter:
+          type: string
+    Subscription:
+      example:
+        paused_at: 2000-01-23T04:56:07.000+00:00
+        updated_at: 2000-01-23T04:56:07.000+00:00
+        secret_rotated_at: 2000-01-23T04:56:07.000+00:00
+        name: name
+        consecutive_failures: 0
+        created_at: 2000-01-23T04:56:07.000+00:00
+        id: id
+        state: active
+        url: https://openapi-generator.tech
+        event_filter: event_filter
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        url:
+          format: uri
+          type: string
+        event_filter:
+          type: string
+        state:
+          enum:
+          - active
+          - paused
+          - disabled
+          type: string
+        consecutive_failures:
+          type: integer
+        paused_at:
+          format: date-time
+          type: string
+          nullable: true
+        secret_rotated_at:
+          format: date-time
+          type: string
+          nullable: true
+        created_at:
+          format: date-time
+          type: string
+        updated_at:
+          format: date-time
+          type: string
+      required:
+      - consecutive_failures
+      - created_at
+      - event_filter
+      - id
+      - state
+      - url
+    SubscriptionWithSecret:
+      allOf:
+      - $ref: "#/components/schemas/Subscription"
+      - properties:
+          signing_secret:
+            description: Plaintext signing secret. Shown only on creation and rotation.
+            example: whsec_abcdef0123456789...
+            type: string
+        required:
+        - signing_secret
+      example:
+        paused_at: 2000-01-23T04:56:07.000+00:00
+        signing_secret: whsec_abcdef0123456789...
+        updated_at: 2000-01-23T04:56:07.000+00:00
+        secret_rotated_at: 2000-01-23T04:56:07.000+00:00
+        name: name
+        consecutive_failures: 0
+        created_at: 2000-01-23T04:56:07.000+00:00
+        id: id
+        state: active
+        url: https://openapi-generator.tech
+        event_filter: event_filter
+    SubscriptionPage:
+      example:
+        next_cursor: next_cursor
+        data:
+        - paused_at: 2000-01-23T04:56:07.000+00:00
+          updated_at: 2000-01-23T04:56:07.000+00:00
+          secret_rotated_at: 2000-01-23T04:56:07.000+00:00
+          name: name
+          consecutive_failures: 0
+          created_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          state: active
+          url: https://openapi-generator.tech
+          event_filter: event_filter
+        - paused_at: 2000-01-23T04:56:07.000+00:00
+          updated_at: 2000-01-23T04:56:07.000+00:00
+          secret_rotated_at: 2000-01-23T04:56:07.000+00:00
+          name: name
+          consecutive_failures: 0
+          created_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          state: active
+          url: https://openapi-generator.tech
+          event_filter: event_filter
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/Subscription"
+          type: array
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - data
+      - next_cursor
+    Delivery:
+      example:
+        subscription_id: subscription_id
+        final_status_code: 6
+        completed_at: 2000-01-23T04:56:07.000+00:00
+        event_id: event_id
+        next_attempt_at: 2000-01-23T04:56:07.000+00:00
+        created_at: 2000-01-23T04:56:07.000+00:00
+        id: id
+        attempts_made: 0
+        status: pending
+        attempts:
+        - response_headers:
+            key: response_headers
+          attempt_number: 1
+          response_status: 5
+          response_body_snippet: response_body_snippet
+          attempted_at: 2000-01-23T04:56:07.000+00:00
+          error_code: error_code
+          request_signature: request_signature
+          latency_ms: 5
+        - response_headers:
+            key: response_headers
+          attempt_number: 1
+          response_status: 5
+          response_body_snippet: response_body_snippet
+          attempted_at: 2000-01-23T04:56:07.000+00:00
+          error_code: error_code
+          request_signature: request_signature
+          latency_ms: 5
+      properties:
+        id:
+          type: string
+        event_id:
+          type: string
+        subscription_id:
+          type: string
+        status:
+          enum:
+          - pending
+          - success
+          - failed
+          - dead
+          type: string
+        attempts_made:
+          type: integer
+        next_attempt_at:
+          format: date-time
+          type: string
+          nullable: true
+        final_status_code:
+          type: integer
+          nullable: true
+        completed_at:
+          format: date-time
+          type: string
+          nullable: true
+        created_at:
+          format: date-time
+          type: string
+        attempts:
+          description: "Present on retrieve, omitted on list."
+          items:
+            $ref: "#/components/schemas/DeliveryAttempt"
+          type: array
+      required:
+      - attempts_made
+      - created_at
+      - event_id
+      - id
+      - status
+      - subscription_id
+    DeliveryAttempt:
+      example:
+        response_headers:
+          key: response_headers
+        attempt_number: 1
+        response_status: 5
+        response_body_snippet: response_body_snippet
+        attempted_at: 2000-01-23T04:56:07.000+00:00
+        error_code: error_code
+        request_signature: request_signature
+        latency_ms: 5
+      properties:
+        attempt_number:
+          type: integer
+        request_signature:
+          description: "Format: t={unix_ts},v1={hex_hmac_sha256}"
+          type: string
+        response_status:
+          type: integer
+          nullable: true
+        response_headers:
+          additionalProperties:
+            type: string
+          nullable: true
+        response_body_snippet:
+          description: "First 4 KB of the response body, UTF-8 best-effort."
+          type: string
+          nullable: true
+        latency_ms:
+          type: integer
+          nullable: true
+        error_code:
+          type: string
+          nullable: true
+        attempted_at:
+          format: date-time
+          type: string
+      required:
+      - attempt_number
+      - attempted_at
+      - request_signature
+    DeliveryPage:
+      example:
+        next_cursor: next_cursor
+        data:
+        - subscription_id: subscription_id
+          final_status_code: 6
+          completed_at: 2000-01-23T04:56:07.000+00:00
+          event_id: event_id
+          next_attempt_at: 2000-01-23T04:56:07.000+00:00
+          created_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          attempts_made: 0
+          status: pending
+          attempts:
+          - response_headers:
+              key: response_headers
+            attempt_number: 1
+            response_status: 5
+            response_body_snippet: response_body_snippet
+            attempted_at: 2000-01-23T04:56:07.000+00:00
+            error_code: error_code
+            request_signature: request_signature
+            latency_ms: 5
+          - response_headers:
+              key: response_headers
+            attempt_number: 1
+            response_status: 5
+            response_body_snippet: response_body_snippet
+            attempted_at: 2000-01-23T04:56:07.000+00:00
+            error_code: error_code
+            request_signature: request_signature
+            latency_ms: 5
+        - subscription_id: subscription_id
+          final_status_code: 6
+          completed_at: 2000-01-23T04:56:07.000+00:00
+          event_id: event_id
+          next_attempt_at: 2000-01-23T04:56:07.000+00:00
+          created_at: 2000-01-23T04:56:07.000+00:00
+          id: id
+          attempts_made: 0
+          status: pending
+          attempts:
+          - response_headers:
+              key: response_headers
+            attempt_number: 1
+            response_status: 5
+            response_body_snippet: response_body_snippet
+            attempted_at: 2000-01-23T04:56:07.000+00:00
+            error_code: error_code
+            request_signature: request_signature
+            latency_ms: 5
+          - response_headers:
+              key: response_headers
+            attempt_number: 1
+            response_status: 5
+            response_body_snippet: response_body_snippet
+            attempted_at: 2000-01-23T04:56:07.000+00:00
+            error_code: error_code
+            request_signature: request_signature
+            latency_ms: 5
+      properties:
+        data:
+          items:
+            $ref: "#/components/schemas/Delivery"
+          type: array
+        next_cursor:
+          type: string
+          nullable: true
+      required:
+      - data
+      - next_cursor
+    Problem:
+      description: RFC 7807 problem details.
+      properties:
+        type:
+          example: https://webhook-relay.dcsuniverse.com/errors/validation
+          format: uri
+          type: string
+        title:
+          example: Invalid request
+          type: string
+        status:
+          example: 400
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          additionalProperties:
+            items:
+              type: string
+      required:
+      - status
+      - title
+      - type
+    healthz_200_response:
+      example:
+        version: version
+        status: healthy
+      properties:
+        status:
+          enum:
+          - healthy
+          type: string
+        version:
+          type: string
+      required:
+      - status
+      - version
+    Event_deliveries_summary:
+      example:
+        total: 0
+        pending: 5
+        failed: 1
+        succeeded: 6
+      properties:
+        total:
+          type: integer
+        succeeded:
+          type: integer
+        failed:
+          type: integer
+        pending:
+          type: integer
+      required:
+      - failed
+      - pending
+      - succeeded
+      - total
+  securitySchemes:
+    ApiKeyAuth:
+      bearerFormat: API Key
+      description: |
+        Bearer token using your workspace API key.
+
+        ```
+        Authorization: Bearer whk_live_...
+        ```
+      scheme: bearer
+      type: http

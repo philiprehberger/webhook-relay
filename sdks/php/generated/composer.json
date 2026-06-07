@@ -1,0 +1,40 @@
+{
+    "name": "philiprehberger/webhook-relay-client",
+    "version": "0.3.0",
+    "description": "Webhook Relay accepts events from your application and fans them out to subscriber endpoints with HMAC signing, idempotency-key dedup, exponential-backoff retries, dead-letter handling, and per-attempt observability.  This spec is the source of truth for the API. Controllers conform to it; SDKs are generated from it. Run `npx @stoplight/spectral-cli lint openapi/spec.yaml` to validate locally.",
+    "keywords": [
+        "openapitools",
+        "openapi-generator",
+        "openapi",
+        "php",
+        "sdk",
+        "rest",
+        "api"
+    ],
+    "homepage": "https://openapi-generator.tech",
+    "license": "unlicense",
+    "authors": [
+        {
+            "name": "OpenAPI",
+            "homepage": "https://openapi-generator.tech"
+        }
+    ],
+    "require": {
+        "php": "^8.1",
+        "ext-curl": "*",
+        "ext-json": "*",
+        "ext-mbstring": "*",
+        "guzzlehttp/guzzle": "^7.3",
+        "guzzlehttp/psr7": "^1.7 || ^2.0"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^8.0 || ^9.0",
+        "friendsofphp/php-cs-fixer": "^3.5"
+    },
+    "autoload": {
+        "psr-4": { "WebhookRelayClient\\" : "src/" }
+    },
+    "autoload-dev": {
+        "psr-4": { "WebhookRelayClient\\Test\\" : "test/" }
+    }
+}

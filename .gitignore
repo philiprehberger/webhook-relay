@@ -31,3 +31,13 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# SDK build outputs and language-specific caches
+/sdks/typescript/dist/
+/sdks/typescript/node_modules/
+/sdks/php/vendor/
+/sdks/python/.venv/
+/sdks/python/dist/
+/sdks/python/*.egg-info/
+/sdks/python/__pycache__/
+/sdks/python/.pytest_cache/

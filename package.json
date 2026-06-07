@@ -12,6 +12,7 @@
         "deploy:health": "bash scripts/deploy/health-check.sh"
     },
     "devDependencies": {
+        "@openapitools/openapi-generator-cli": "^2.34.0",
         "@tailwindcss/vite": "^4.0.0",
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^3.1",
