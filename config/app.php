@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Application Version
+    |--------------------------------------------------------------------------
+    |
+    | Reported by GET /v1/healthz. Bumped in lockstep with the version field
+    | in openapi/spec.yaml so a deployed release advertises the spec it
+    | implements.
+    |
+    */
+
+    'version' => '0.5.0',
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Environment
     |--------------------------------------------------------------------------
     |
