@@ -1,0 +1,12 @@
+{
+    "_note": "Deterministic golden. Regenerate with `php artisan relay:capture-goldens`.",
+    "_frozen_time": "2026-01-15T12:00:00+00:00",
+    "body": "{\"id\":\"01JGOLDEN0EVENT0000000001\",\"type\":\"contact.created\",\"created_at\":\"2026-01-15T12:00:00+00:00\",\"data\":{\"email\":\"jane.doe@acme.example.test\",\"name\":\"Jane Doe\"}}",
+    "headers": {
+        "X-Webhook-Signature": "t=1768478400,v1=ff159db9bd95a49b4406d3375f94474143a1e43ccdeb1b57fb3cf081e3e5b7eb",
+        "X-Webhook-Event-Id": "01JGOLDEN0EVENT0000000001",
+        "X-Webhook-Event-Type": "contact.created",
+        "X-Webhook-Timestamp": "1768478400",
+        "Content-Type": "application/json"
+    }
+}
