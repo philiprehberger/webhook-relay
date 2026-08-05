@@ -23,6 +23,10 @@ class Event extends Model
         'type',
         'payload',
         'idempotency_key',
+        'correlation_id',
+        'causation_id',
+        'trace_id',
+        'trace_class',
         'source_ip',
     ];
 

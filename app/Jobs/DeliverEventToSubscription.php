@@ -13,7 +13,10 @@ use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\DB;
+use App\Models\SignatureSchemeUsage;
 use Illuminate\Support\Facades\Http;
+use PhilipRehberger\Interchange\Http\PropagatingHttpClient;
+use PhilipRehberger\Interchange\Signing\StandardWebhooksScheme;
 use Illuminate\Support\Str;
 
 class DeliverEventToSubscription implements ShouldQueue
@@ -82,7 +85,27 @@ class DeliverEventToSubscription implements ShouldQueue
             'data' => $event->payload,
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        $signed = $signer->sign($subscription->signing_secret, $body);
+        // Plan 7.7 — per-subscription scheme. webhook-relay-v0 stays the
+        // default permanently: Standard Webhooks needs a newly issued whsec_
+        // secret and a subscriber handshake, so it is never a bulk flip.
+        $scheme = (string) ($subscription->signature_scheme ?? 'webhook-relay-v0');
+
+        if ($scheme === 'standard-webhooks') {
+            $standardHeaders = (new StandardWebhooksScheme)->sign(
+                $event->id,
+                $body,
+                $subscription->signing_secret,
+            );
+            $signed = [
+                'header' => $standardHeaders['webhook-signature'],
+                'timestamp' => (int) $standardHeaders['webhook-timestamp'],
+            ];
+        } else {
+            $standardHeaders = [];
+            $signed = $signer->sign($subscription->signing_secret, $body);
+        }
+
+        SignatureSchemeUsage::record($subscription->id, $scheme);
         $attemptNumber = $delivery->attempts_made + 1;
         $start = microtime(true);
 
@@ -106,14 +129,20 @@ class DeliverEventToSubscription implements ShouldQueue
         }
 
         try {
-            $response = Http::withHeaders([
+            $nativeHeaders = $scheme === 'standard-webhooks' ? [] : [
                 'X-Webhook-Signature' => $signed['header'],
+                'X-Webhook-Timestamp' => (string) $signed['timestamp'],
+            ];
+
+            $response = Http::withHeaders($nativeHeaders + $standardHeaders + [
                 'X-Webhook-Event-Id' => $event->id,
                 'X-Webhook-Event-Type' => $event->type,
-                'X-Webhook-Timestamp' => (string) $signed['timestamp'],
                 'Content-Type' => 'application/json',
                 'User-Agent' => 'WebhookRelay/0.3 (+https://webhook-relay.dcsuniverse.com)',
-            ])
+                // Plan 7.4 — correlation travels with the delivery, so a
+                // receiver can tie it back to whatever caused it.
+                'X-Correlation-Id' => (string) ($event->correlation_id ?? ''),
+            ] + PropagatingHttpClient::headers())
                 ->withBody($body, 'application/json')
                 ->timeout(self::TIMEOUT_SECONDS)
                 ->retry(0)

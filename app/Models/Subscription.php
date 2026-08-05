@@ -23,6 +23,7 @@ class Subscription extends Model
         'name',
         'url',
         'signing_secret',
+        'signature_scheme',
         'previous_signing_secret',
         'secret_rotated_at',
         'event_filter',

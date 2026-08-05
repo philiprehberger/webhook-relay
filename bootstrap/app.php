@@ -20,6 +20,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.key' => \App\Http\Middleware\ApiKeyAuth::class,
             'workspace.rate-limit' => \App\Http\Middleware\WorkspaceRateLimit::class,
         ]);
+
+        // Plan 7.1 — accept and echo W3C trace context. Queue propagation is
+        // registered by the package's service provider.
+        $middleware->append(\PhilipRehberger\Interchange\Http\TraceMiddleware::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

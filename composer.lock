@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d3f760efcf772c18c0fb02c5221abad8",
+    "content-hash": "635ff3d5b0dcc9ccb8fc49b082393d5a",
     "packages": [
         {
             "name": "blade-ui-kit/blade-heroicons",
@@ -4196,6 +4196,128 @@
                 "source": "https://github.com/paragonie/constant_time_encoding"
             },
             "time": "2025-09-24T15:06:41+00:00"
+        },
+        {
+            "name": "philiprehberger/interchange",
+            "version": "v0.2.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/philiprehberger/php-interchange.git",
+                "reference": "d068e98c063683a3f1a85387911b88e2eef592a8"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/philiprehberger/php-interchange/zipball/d068e98c063683a3f1a85387911b88e2eef592a8",
+                "reference": "d068e98c063683a3f1a85387911b88e2eef592a8",
+                "shasum": ""
+            },
+            "require": {
+                "philiprehberger/php-webhook-signature": "1.0.0",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.0",
+                "orchestra/testbench": "^9.0|^10.0",
+                "phpstan/phpstan": "^1.12|^2.0",
+                "phpunit/phpunit": "^11.0"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "PhilipRehberger\\Interchange\\InterchangeServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "PhilipRehberger\\Interchange\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Philip Rehberger",
+                    "email": "me@philiprehberger.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Service contract for interoperable HTTP services: W3C Trace Context across HTTP and queue boundaries, Standard Webhooks signing, and pluggable signature schemes",
+            "homepage": "https://github.com/philiprehberger/php-interchange",
+            "keywords": [
+                "W3C",
+                "laravel",
+                "observability",
+                "standard-webhooks",
+                "trace-context",
+                "webhooks"
+            ],
+            "support": {
+                "issues": "https://github.com/philiprehberger/php-interchange/issues",
+                "source": "https://github.com/philiprehberger/php-interchange/tree/v0.2.0"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/philiprehberger",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-08-05T17:13:38+00:00"
+        },
+        {
+            "name": "philiprehberger/php-webhook-signature",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/philiprehberger/php-webhook-signature.git",
+                "reference": "d2a908b2d82f60e1f391d8e72f6131060da629ec"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/philiprehberger/php-webhook-signature/zipball/d2a908b2d82f60e1f391d8e72f6131060da629ec",
+                "reference": "d2a908b2d82f60e1f391d8e72f6131060da629ec",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.0",
+                "phpunit/phpunit": "^11.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "PhilipRehberger\\WebhookSignature\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Philip Rehberger",
+                    "email": "me@philiprehberger.com"
+                }
+            ],
+            "description": "Minimal, framework-agnostic HMAC-SHA256 webhook signature generation and verification with replay attack prevention.",
+            "keywords": [
+                "hmac",
+                "security",
+                "sha256",
+                "signature",
+                "stripe",
+                "webhook"
+            ],
+            "support": {
+                "issues": "https://github.com/philiprehberger/php-webhook-signature/issues",
+                "source": "https://github.com/philiprehberger/php-webhook-signature/tree/v1.0.0"
+            },
+            "time": "2026-03-06T17:05:33+00:00"
         },
         {
             "name": "phpoption/phpoption",
@@ -9970,6 +10092,61 @@
                 "source": "https://github.com/phar-io/version/tree/3.2.1"
             },
             "time": "2022-02-21T01:04:05+00:00"
+        },
+        {
+            "name": "philiprehberger/interchange-conformance",
+            "version": "v0.1.3",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/philiprehberger/php-interchange-conformance.git",
+                "reference": "8ceb7ae6e0555a4ba82f8a9aec7ca853306f7f14"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/philiprehberger/php-interchange-conformance/zipball/8ceb7ae6e0555a4ba82f8a9aec7ca853306f7f14",
+                "reference": "8ceb7ae6e0555a4ba82f8a9aec7ca853306f7f14",
+                "shasum": ""
+            },
+            "require": {
+                "philiprehberger/interchange": "0.2.0",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.0",
+                "orchestra/testbench": "^9.0|^10.0",
+                "phpunit/phpunit": "^11.0|^12.0"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "PhilipRehberger\\InterchangeConformance\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Philip Rehberger",
+                    "email": "me@philiprehberger.com",
+                    "role": "Developer"
+                }
+            ],
+            "description": "Conformance assertions for the Interchange service contract — framework-agnostic, installable alongside any test runner",
+            "homepage": "https://github.com/philiprehberger/php-interchange-conformance",
+            "keywords": [
+                "conformance",
+                "contract-testing",
+                "interchange",
+                "standard-webhooks",
+                "trace-context"
+            ],
+            "support": {
+                "issues": "https://github.com/philiprehberger/php-interchange-conformance/issues",
+                "source": "https://github.com/philiprehberger/php-interchange-conformance/tree/v0.1.3"
+            },
+            "time": "2026-08-05T17:39:28+00:00"
         },
         {
             "name": "phpunit/php-code-coverage",
