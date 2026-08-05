@@ -14,6 +14,8 @@ use App\Services\SubscriptionMatcher;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use PhilipRehberger\Interchange\Tracing\TraceScope;
 
 class EventsController extends Controller
 {
@@ -28,7 +30,20 @@ class EventsController extends Controller
         $validated = $request->validate([
             'type' => ['required', 'string', 'regex:/^[a-z0-9._-]{1,128}$/'],
             'payload' => ['required', 'array'],
+            // Plan 7.3 — accepted via envelope OR header; generated when absent.
+            'correlation_id' => ['sometimes', 'nullable', 'string', 'max:64'],
+            'causation_id' => ['sometimes', 'nullable', 'string', 'max:64'],
         ]);
+
+        // Header wins over body only when the body omits it: a caller that
+        // states it explicitly means it. Generated when neither is present, so
+        // every event is correlatable even from a client that knows nothing
+        // about the contract.
+        $correlationId = $validated['correlation_id']
+            ?? $request->header('X-Correlation-Id')
+            ?? (string) Str::ulid();
+
+        $traceContext = TraceScope::current();
 
         $rawPayload = json_encode($validated['payload']);
         if ($rawPayload === false || strlen($rawPayload) > self::MAX_PAYLOAD_BYTES) {
@@ -69,13 +84,19 @@ class EventsController extends Controller
             }
         }
 
-        return DB::transaction(function () use ($workspace, $validated, $idempotencyKey, $fingerprint, $request) {
+        return DB::transaction(function () use ($workspace, $validated, $idempotencyKey, $fingerprint, $request, $correlationId, $traceContext) {
             $event = Event::create([
                 'workspace_id' => $workspace->id,
                 'type' => $validated['type'],
                 'payload' => $validated['payload'],
                 'idempotency_key' => $idempotencyKey,
                 'source_ip' => $request->ip(),
+                'correlation_id' => $correlationId,
+                'causation_id' => $validated['causation_id'] ?? $request->header('X-Causation-Id'),
+                'trace_id' => $traceContext?->traceId,
+                // Advisory only (SPEC §3.4): recorded so a scenario run is
+                // distinguishable, never consulted for storage or exposure.
+                'trace_class' => $traceContext?->state?->get('mnl_class') ?? 'production',
             ]);
 
             $this->dispatchFanOut($event);

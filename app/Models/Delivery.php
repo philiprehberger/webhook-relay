@@ -20,6 +20,7 @@ class Delivery extends Model
         'event_id',
         'subscription_id',
         'workspace_id',
+        'trace_id',
         'status',
         'attempts_made',
         'next_attempt_at',

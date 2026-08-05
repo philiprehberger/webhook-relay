@@ -90,3 +90,8 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Interchange conformance
+        # Plan 6.11 — enforced on every push. A green cell nothing re-checks
+        # decays the first time someone is in a hurry.
+        run: vendor/bin/phpunit --filter InterchangeConformanceTest

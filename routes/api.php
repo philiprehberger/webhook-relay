@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\EventsController;
 use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\Api\SandboxKeysController;
 use App\Http\Controllers\Api\SubscriptionsController;
+use App\Http\Controllers\Api\TracesController;
 use App\Http\Controllers\Api\WebhookTestController;
 use Illuminate\Support\Facades\Route;
 
@@ -18,6 +19,10 @@ Route::prefix('v1')->group(function () {
     Route::middleware(['api.key', 'workspace.rate-limit'])->group(function () {
         Route::post('events', [EventsController::class, 'store'])->name('v1.events.store');
         Route::get('events', [EventsController::class, 'index'])->name('v1.events.index');
+
+        // Plan 7.6 — answers "which delivery came from this submission?".
+        // Workspace-scoped, metadata only.
+        Route::get('traces/{traceId}', [TracesController::class, 'show'])->name('v1.traces.show');
         Route::get('events/{id}', [EventsController::class, 'show'])->name('v1.events.show');
 
         Route::post('subscriptions', [SubscriptionsController::class, 'store'])->name('v1.subscriptions.store');
