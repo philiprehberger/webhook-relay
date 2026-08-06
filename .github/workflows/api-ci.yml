@@ -66,6 +66,15 @@ jobs:
       - name: Run Pest / PHPUnit
         run: php artisan test --parallel
 
+      # Plan 6.11 — enforced on every push. A green cell nothing re-checks
+      # decays the first time someone is in a hurry.
+      #
+      # This lived in the web-build job, which installs npm dependencies and
+      # never runs composer, so `vendor/bin/phpunit` did not exist and the step
+      # failed on every single run. It belongs here, where PHP and vendor/ are.
+      - name: Interchange conformance
+        run: vendor/bin/phpunit --filter InterchangeConformanceTest
+
   web-build:
     runs-on: ubuntu-latest
     defaults:
@@ -91,7 +100,3 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Interchange conformance
-        # Plan 6.11 — enforced on every push. A green cell nothing re-checks
-        # decays the first time someone is in a hurry.
-        run: vendor/bin/phpunit --filter InterchangeConformanceTest
