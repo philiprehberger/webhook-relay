@@ -68,6 +68,48 @@ paths:
               schema:
                 type: string
 
+  /v1/sandbox/keys:
+    post:
+      summary: Mint an anonymous sandbox key
+      description: |
+        Issues a short-lived, downscoped API key so a docs visitor can drive the
+        try-it console without bringing their own credential.
+
+        **Unauthenticated by design**, with three constraints that are part of the
+        contract rather than incidental:
+
+        - Rate limited to 5 keys per IP per hour.
+        - Keys expire after 24 hours and are tied to a shared public sandbox workspace.
+        - Deliveries and probes made with a sandbox key are restricted at delivery
+          time to an allowlist of receiver-testing hosts (`webhook.site`,
+          `requestbin.com`, `httpbin.org`), so the relay cannot be turned into an
+          open egress. Redirects are never followed, on any key.
+      operationId: mintSandboxKey
+      tags: [Events]
+      security: []
+      responses:
+        "201":
+          description: A sandbox key. The plaintext is shown once and not recoverable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  key:
+                    type: string
+                    description: Plaintext key, prefixed `whk_sandbox_`.
+                    example: whk_sandbox_0123456789abcdef
+                  workspace_id:
+                    type: string
+                  expires_in_hours:
+                    type: integer
+                    example: 24
+        "429":
+          description: Per-IP mint limit reached.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
   /v1/healthz:
     get:
       summary: Liveness check
@@ -922,7 +964,7 @@ components:
 
     Problem:
       type: object
-      description: RFC 7807 problem details.
+      description: RFC 9457 problem details.
       required: [type, title, status]
       properties:
         type:

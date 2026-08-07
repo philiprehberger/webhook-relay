@@ -64,7 +64,13 @@ class WebhookTestController
         $start = microtime(true);
 
         try {
-            $response = Http::withHeaders([
+            // Redirects are refused, not followed. The allowlist and SsrfGuard
+            // both validate the URL they are handed; following a 302 reaches an
+            // address neither saw. httpbin.org is an allowlisted host that
+            // offers /redirect-to, so with redirects on, an anonymous sandbox
+            // key could read internal services through response_body_snippet.
+            $response = Http::withOptions(['allow_redirects' => false])
+                ->withHeaders([
                 'X-Webhook-Signature' => $signed['header'],
                 'X-Webhook-Event-Type' => $validated['event_type'] ?? 'test.ping',
                 'X-Webhook-Timestamp' => (string) $signed['timestamp'],
@@ -76,10 +82,28 @@ class WebhookTestController
                 ->retry(0)
                 ->post($validated['url']);
 
+            $latencyMs = (int) round((microtime(true) - $start) * 1000);
+
+            // A 3xx is reported as a failed probe with no body echoed back —
+            // the redirect target was never validated, so its response is not
+            // ours to hand to the caller.
+            if ($response->redirect()) {
+                return response()->json([
+                    'ok' => false,
+                    'status' => $response->status(),
+                    'latency_ms' => $latencyMs,
+                    'response_body_snippet' => null,
+                    'signature_sent' => $signed['header'],
+                    'secret_used' => $secret,
+                    'error_code' => 'redirect_refused',
+                    'error_detail' => 'The endpoint answered with a redirect. Redirects are not followed — point the probe at the final URL.',
+                ]);
+            }
+
             return response()->json([
                 'ok' => $response->successful(),
                 'status' => $response->status(),
-                'latency_ms' => (int) round((microtime(true) - $start) * 1000),
+                'latency_ms' => $latencyMs,
                 'response_body_snippet' => Str::limit((string) $response->body(), self::BODY_SNIPPET_BYTES, ''),
                 'signature_sent' => $signed['header'],
                 'secret_used' => $secret,

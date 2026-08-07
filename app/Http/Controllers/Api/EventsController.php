@@ -96,7 +96,23 @@ class EventsController extends Controller
                 'trace_id' => $traceContext?->traceId,
                 // Advisory only (SPEC §3.4): recorded so a scenario run is
                 // distinguishable, never consulted for storage or exposure.
-                'trace_class' => $traceContext?->state?->get('mnl_class') ?? 'production',
+                // Fail closed, and *normalise* rather than merely defaulting.
+                //
+                // `?? 'production'` only handled an absent member: a caller
+                // sending `mnl_class=Scenario` or ` scenario ` had that stored
+                // verbatim, producing a value that is neither class and that a
+                // later `!== 'production'` check would read as permissive.
+                // Anything that is not exactly `scenario` is production.
+                //
+                // This duplicates PhilipRehberger\Interchange\Tracing\TraceClass,
+                // which exists in the package source but not in the released
+                // v0.2.0 pinned here. Replace this with TraceClass::fromState()
+                // once a release carrying it is cut — the package's own docblock
+                // makes the point that a fail-closed rule reimplemented per
+                // service is a fail-closed rule with per-service exceptions.
+                'trace_class' => $traceContext?->state?->get('mnl_class') === 'scenario'
+                    ? 'scenario'
+                    : 'production',
             ]);
 
             $this->dispatchFanOut($event);

@@ -134,7 +134,13 @@ class DeliverEventToSubscription implements ShouldQueue
                 'X-Webhook-Timestamp' => (string) $signed['timestamp'],
             ];
 
-            $response = Http::withHeaders($nativeHeaders + $standardHeaders + [
+            // Redirects are refused, not followed. SsrfGuard validates the URL
+            // it is handed; Guzzle's default would then follow a 302 to an
+            // address the guard never saw, and the response snippet persisted
+            // below is readable by the tenant. A webhook receiver has no
+            // legitimate reason to redirect a delivery.
+            $response = Http::withOptions(['allow_redirects' => false])
+                ->withHeaders($nativeHeaders + $standardHeaders + [
                 'X-Webhook-Event-Id' => $event->id,
                 'X-Webhook-Event-Type' => $event->type,
                 'Content-Type' => 'application/json',
